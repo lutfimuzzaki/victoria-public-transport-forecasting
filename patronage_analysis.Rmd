@@ -1,0 +1,103 @@
+---
+title: "Monthly Public Transport Patronage Analysis"
+author: "Lutfi Muzzaki Khairullah"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r}
+# Load readr library
+# library(readr)
+library(tidyverse)
+
+#Load the dataset
+data <- read_csv("public_transport_patronage.csv")
+```
+
+```{r}
+# Check the data
+glimpse(data)
+```
+
+## ANALYSIS 1 - DESCRIPTIVE STATISTICS
+
+```{r}
+# Calculate descriptive statistics for each mode
+data %>%
+  gather(key = "Mode", value = "Value", `Metropolitan train`:`Regional bus`) %>%
+  group_by(Mode) %>%
+  summarise(
+    "Mean" = mean(Value, na.rm = TRUE),
+    "Median" = median(Value, na.rm = TRUE),
+    "Variance" = var(Value, na.rm = TRUE),
+    "Std. Deviation" = sd(Value, na.rm = TRUE)
+    )
+```
+
+## ANALYSIS 2 - TIME SERIES TREND ANALYSIS
+
+```{r}
+# Create a new column with year-month value
+data$YearMonth <- as.Date(paste(data$Year, data$Month, "1", sep = "-"), format = "%Y-%m-%d")
+
+# Drop the original Year and Month columns
+data_drop <- data %>% select(-`Year`, -`Month name`)
+
+data_long <- tidyr::pivot_longer(data_drop, cols = -YearMonth, names_to = "Mode", values_to = "Count")
+
+ggplot(data_long, aes(x = YearMonth, y = Count, color = Mode)) +
+  geom_line() +
+  labs(title = "Patronage Count by Mode",
+       x = 'Year-Month',
+       y = 'Patronage Count') +
+  theme(axis.text.x = element_text(angle = 60, hjust = 1)) +
+  scale_color_manual(values = c(
+    "Metropolitan train" = "blue",
+    "Metropolitan tram" = "red",
+    "Metropolitan bus" = "green",
+    "Regional train" = "purple",
+    "Regional coach" = "orange",
+    "Regional bus" = "pink"
+  )) +
+  guides(color = guide_legend(title = "Mode")) +
+  scale_x_date(date_labels = "%Y-%m", date_breaks = "1 year")
+```
+
+## ANALYSIS 3 - TIME SERIES FORECASTING
+
+```{r}
+# Load libraries for time series analysis
+library(stats)
+library(forecast)
+
+# Create a list of modes
+modes <- c("Metropolitan train", "Metropolitan tram", "Metropolitan bus", "Regional train", "Regional coach", "Regional bus")
+
+# Loop through the modes and generate forecasts and plots for each mode
+for (mode in modes) {
+  # Convert the data for the current mode to a time series object
+  ts_data <- ts(data[[mode]], start = c(2018, 1), frequency = 12)
+
+  # Fit an ARIMA model for the current mode
+  arima_model <- auto.arima(ts_data)
+
+  # Generate forecasts for the next 12 months for the current mode
+  forecast_values <- forecast(arima_model, h = 12)
+
+  # Create a plot for the forecast of the current mode
+  # plot(forecast_values, xlab = "Year-Month", ylab = "Patronage Count", main = paste("ARIMA Forecast for", mode))
+  
+  # Save the plot as an image file if needed
+  png(paste(mode, ".png", sep = ""), width = 1200, height = 800)
+  plot(forecast_values, xlab = "Year-Month", ylab = "Patronage Count", main = paste("ARIMA Forecast for", mode))
+  dev.off()
+}
+
+```
